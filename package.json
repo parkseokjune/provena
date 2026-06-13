@@ -9,7 +9,8 @@
   "scripts": {
     "test": "node --test test/provena.test.ts && node test-judge.ts",
     "eval": "node src/eval.ts",
-    "eval:heldout": "node src/eval-heldout.ts"
+    "eval:heldout": "node src/eval-heldout.ts",
+    "prepublishOnly": "node --test test/provena.test.ts && node test-judge.ts"
   },
   "engines": {
     "node": ">=23.6"
