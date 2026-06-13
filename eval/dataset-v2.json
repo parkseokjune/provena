@@ -1,0 +1,75 @@
+{
+  "description": "Larger multi-language provenance benchmark. 30 labeled spans across 5 files (TS, Python, Go) and 8 sources. The held-out eval (src/eval-heldout.ts) calibrates the threshold on a deterministic train split and reports on the test split.",
+  "sources": [
+    { "uri": "oauth-spec.md", "type": "file", "content": "OAuth2 Authorization Code Flow. The client exchanges an authorization code at the token endpoint for an access token and a refresh token. Access tokens are short-lived JWTs signed with HS256 and expire after 15 minutes. The token endpoint must reject any authorization code that has already been redeemed once, to prevent replay attacks." },
+    { "uri": "stripe-webhooks.md", "type": "web", "content": "Verifying Stripe webhook signatures. To verify, compute an HMAC-SHA256 of the raw request body using your endpoint signing secret, then compare it to the header signature using a constant-time comparison to avoid timing attacks." },
+    { "uri": "conversation", "type": "user_msg", "content": "For our app, refresh tokens should last 30 days, not the default. Store the refresh token hashed in the database, never in plaintext. The login endpoint should rate-limit to 5 attempts per minute per IP address." },
+    { "uri": "pagination-spec.md", "type": "file", "content": "List endpoints use cursor-based pagination. The cursor is an opaque base64 of the last item's id and created_at. Default page size is 20, maximum 100. The response includes a next_cursor field that is null when there are no more results." },
+    { "uri": "logging-spec.md", "type": "file", "content": "All requests are logged as structured JSON with a request_id, an ISO-8601 timestamp, the route, and the latency in milliseconds. Personally identifiable information must be redacted from logs. Log level defaults to info." },
+    { "uri": "caching-spec.md", "type": "file", "content": "Cache entries expire after a 300-second TTL. Eviction uses an LRU policy once the cache exceeds 1000 entries. Cache keys are namespaced in the form tenant:resource:id so different tenants never collide." },
+    { "uri": "retry-spec.md", "type": "file", "content": "Failed jobs retry up to 5 times using exponential backoff starting at 1 second and doubling each attempt, capped at 30 seconds. Add random jitter of up to 50 percent of the delay to avoid thundering-herd retries." },
+    { "uri": "validation-spec.md", "type": "file", "content": "Email addresses must match a standard pattern with a local part, an @, and a domain. Passwords must be at least 12 characters and contain at least one digit and one symbol. Usernames are 3 to 20 alphanumeric characters." }
+  ],
+  "artifacts": [
+    {
+      "path": "auth.ts",
+      "content": "export function buildAccessToken(payload) {\n  const header = { alg: \"HS256\", typ: \"JWT\" };\n  const exp = Math.floor(Date.now() / 1000) + 15 * 60;\n  return sign({ ...payload, exp }, header);\n}\n\nexport function refreshTokenExpiry() {\n  const now = new Date();\n  now.setDate(now.getDate() + 30);\n  return now;\n}\n\nexport function storeRefreshToken(db, raw, userId) {\n  const hashed = createHmac(\"sha256\", PEPPER).update(raw).digest(\"hex\");\n  db.refreshTokens.insert({ userId, hashed });\n}\n\nexport function verifyStripeSignature(body, header) {\n  const expected = createHmac(\"sha256\", WEBHOOK_SECRET).update(body).digest();\n  return timingSafeEqual(expected, Buffer.from(header, \"hex\"));\n}\n\nexport function redeemAuthCode(db, code) {\n  if (db.usedCodes.has(code)) return false;\n  db.usedCodes.add(code);\n  return true;\n}\n\nexport function loginRateLimit(ip) {\n  return tokenBucket(ip, { perMinute: 5 });\n}\n\nexport function slugify(input) {\n  return input.toLowerCase().trim().replace(/[^a-z0-9]+/g, \"-\");\n}\n\nexport function clamp(n, lo, hi) {\n  return Math.max(lo, Math.min(hi, n));\n}\n",
+      "spans": [
+        { "find": "buildAccessToken", "expected": "oauth-spec.md" },
+        { "find": "refreshTokenExpiry", "expected": "conversation" },
+        { "find": "storeRefreshToken", "expected": "conversation" },
+        { "find": "verifyStripeSignature", "expected": "stripe-webhooks.md" },
+        { "find": "redeemAuthCode", "expected": "oauth-spec.md" },
+        { "find": "loginRateLimit", "expected": "conversation" },
+        { "find": "slugify", "expected": "UNGROUNDED" },
+        { "find": "clamp", "expected": "UNGROUNDED" }
+      ]
+    },
+    {
+      "path": "api.ts",
+      "content": "export function encodeCursor(item) {\n  const raw = `${item.id}:${item.created_at}`;\n  return Buffer.from(raw).toString(\"base64\");\n}\n\nexport function pageSize(requested) {\n  const DEFAULT = 20, MAX = 100;\n  return Math.min(requested ?? DEFAULT, MAX);\n}\n\nexport function logRequest(req, latencyMs) {\n  logger.info(JSON.stringify({ request_id: req.id, timestamp: new Date().toISOString(), route: req.route, latency_ms: latencyMs }));\n}\n\nexport function redactPII(obj) {\n  return mask(obj, [\"email\", \"ssn\", \"phone\"]);\n}\n\nexport function uuid() {\n  return crypto.randomUUID();\n}\n\nexport function capitalize(s) {\n  return s.charAt(0).toUpperCase() + s.slice(1);\n}\n",
+      "spans": [
+        { "find": "encodeCursor", "expected": "pagination-spec.md" },
+        { "find": "pageSize", "expected": "pagination-spec.md" },
+        { "find": "logRequest", "expected": "logging-spec.md" },
+        { "find": "redactPII", "expected": "logging-spec.md" },
+        { "find": "uuid", "expected": "UNGROUNDED" },
+        { "find": "capitalize", "expected": "UNGROUNDED" }
+      ]
+    },
+    {
+      "path": "cache.py",
+      "content": "import time\n\ndef get_ttl():\n    return 300\n\ndef should_evict(size):\n    return size > 1000\n\ndef cache_key(tenant, resource, id):\n    return f\"{tenant}:{resource}:{id}\"\n\ndef is_expired(entry, now):\n    return now - entry.created > 300\n\ndef deep_merge(a, b):\n    out = dict(a)\n    for k, v in b.items(): out[k] = v\n    return out\n\ndef to_snake(s):\n    return s.lower().replace(\" \", \"_\")\n",
+      "spans": [
+        { "find": "get_ttl", "expected": "caching-spec.md" },
+        { "find": "should_evict", "expected": "caching-spec.md" },
+        { "find": "cache_key", "expected": "caching-spec.md" },
+        { "find": "is_expired", "expected": "caching-spec.md" },
+        { "find": "deep_merge", "expected": "UNGROUNDED" },
+        { "find": "to_snake", "expected": "UNGROUNDED" }
+      ]
+    },
+    {
+      "path": "worker.go",
+      "content": "package worker\n\nfunc maxRetries() int {\n\treturn 5\n}\n\nfunc backoff(attempt int) time.Duration {\n\td := time.Duration(1<<attempt) * time.Second\n\tif d > 30*time.Second {\n\t\td = 30 * time.Second\n\t}\n\treturn d\n}\n\nfunc withJitter(d time.Duration) time.Duration {\n\treturn d + time.Duration(rand.Float64()*0.5*float64(d))\n}\n\nfunc sumInts(xs []int) int {\n\tt := 0\n\tfor _, x := range xs {\n\t\tt += x\n\t}\n\treturn t\n}\n\nfunc reverseString(s string) string {\n\tr := []rune(s)\n\tfor i, j := 0, len(r)-1; i < j; i, j = i+1, j-1 {\n\t\tr[i], r[j] = r[j], r[i]\n\t}\n\treturn string(r)\n}\n",
+      "spans": [
+        { "find": "maxRetries", "expected": "retry-spec.md" },
+        { "find": "func backoff", "expected": "retry-spec.md" },
+        { "find": "withJitter", "expected": "retry-spec.md" },
+        { "find": "sumInts", "expected": "UNGROUNDED" },
+        { "find": "reverseString", "expected": "UNGROUNDED" }
+      ]
+    },
+    {
+      "path": "validate.ts",
+      "content": "export function isValidEmail(s) {\n  return /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(s);\n}\n\nexport function isStrongPassword(p) {\n  return p.length >= 12 && /\\d/.test(p) && /[^A-Za-z0-9]/.test(p);\n}\n\nexport function isValidUsername(u) {\n  return /^[a-zA-Z0-9]{3,20}$/.test(u);\n}\n\nexport function identity(x) {\n  return x;\n}\n\nexport function rangeArray(n) {\n  return Array.from({ length: n }, (_, i) => i);\n}\n",
+      "spans": [
+        { "find": "isValidEmail", "expected": "validation-spec.md" },
+        { "find": "isStrongPassword", "expected": "validation-spec.md" },
+        { "find": "isValidUsername", "expected": "validation-spec.md" },
+        { "find": "identity", "expected": "UNGROUNDED" },
+        { "find": "rangeArray", "expected": "UNGROUNDED" }
+      ]
+    }
+  ]
+}

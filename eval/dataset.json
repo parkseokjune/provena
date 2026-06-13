@@ -1,0 +1,58 @@
+{
+  "description": "Labeled provenance eval set. Each artifact span is matched to its expected source by a unique substring `find`; `expected` is the source uri or UNGROUNDED.",
+  "sources": [
+    {
+      "uri": "oauth-spec.md",
+      "type": "file",
+      "content": "OAuth2 Authorization Code Flow. The client redirects the user to the authorization endpoint with response_type=code. After consent, the server returns an authorization code via the redirect URI. The client exchanges this code at the token endpoint for an access token and a refresh token. Access tokens are short-lived JWTs signed with HS256 and expire after 15 minutes. The token endpoint must reject any authorization code that has already been redeemed once, to prevent replay attacks. Authorization codes expire 60 seconds after issuance."
+    },
+    {
+      "uri": "stripe-webhooks.md",
+      "type": "web",
+      "content": "Verifying Stripe webhook signatures. Stripe signs each webhook event with a secret and sends the signature in the Stripe-Signature header. To verify, compute an HMAC-SHA256 of the raw request body using your endpoint signing secret, then compare it to the header signature using a constant-time comparison to avoid timing attacks. Reject the event if the timestamp is more than five minutes old to prevent replay."
+    },
+    {
+      "uri": "conversation",
+      "type": "user_msg",
+      "content": "For our app, refresh tokens should last 30 days, not the default. Store the refresh token hashed in the database, never in plaintext. The login endpoint should rate-limit to 5 attempts per minute per IP address."
+    },
+    {
+      "uri": "pagination-spec.md",
+      "type": "file",
+      "content": "List endpoints use cursor-based pagination. The cursor is an opaque base64 of the last item's id and created_at. Default page size is 20, maximum 100. The response includes a next_cursor field that is null when there are no more results."
+    },
+    {
+      "uri": "logging-spec.md",
+      "type": "file",
+      "content": "All requests are logged as structured JSON with a request_id, an ISO-8601 timestamp, the route, and the latency in milliseconds. Personally identifiable information must be redacted from logs. Log level defaults to info, and errors include a stack trace."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "auth.ts",
+      "content": "import { createHmac, timingSafeEqual } from \"crypto\";\n\nexport function buildAccessToken(payload) {\n  const header = { alg: \"HS256\", typ: \"JWT\" };\n  const exp = Math.floor(Date.now() / 1000) + 15 * 60;\n  return sign({ ...payload, exp }, header);\n}\n\nexport function refreshTokenExpiry() {\n  const now = new Date();\n  now.setDate(now.getDate() + 30);\n  return now;\n}\n\nexport function storeRefreshToken(db, raw, userId) {\n  const hashed = createHmac(\"sha256\", PEPPER).update(raw).digest(\"hex\");\n  db.refreshTokens.insert({ userId, hashed });\n}\n\nexport function verifyStripeSignature(body, header) {\n  const expected = createHmac(\"sha256\", WEBHOOK_SECRET).update(body).digest();\n  const provided = Buffer.from(header, \"hex\");\n  return timingSafeEqual(expected, provided);\n}\n\nexport function redeemAuthCode(db, code) {\n  if (db.usedCodes.has(code)) return false;\n  db.usedCodes.add(code);\n  return true;\n}\n\nexport function loginRateLimit(ip) {\n  return tokenBucket(ip, { perMinute: 5 });\n}\n\nexport function slugify(input) {\n  return input.toLowerCase().trim().replace(/[^a-z0-9]+/g, \"-\");\n}\n\nexport function clamp(n, lo, hi) {\n  return Math.max(lo, Math.min(hi, n));\n}\n",
+      "spans": [
+        { "find": "buildAccessToken", "expected": "oauth-spec.md" },
+        { "find": "refreshTokenExpiry", "expected": "conversation" },
+        { "find": "storeRefreshToken", "expected": "conversation" },
+        { "find": "verifyStripeSignature", "expected": "stripe-webhooks.md" },
+        { "find": "redeemAuthCode", "expected": "oauth-spec.md" },
+        { "find": "loginRateLimit", "expected": "conversation" },
+        { "find": "slugify", "expected": "UNGROUNDED" },
+        { "find": "clamp", "expected": "UNGROUNDED" }
+      ]
+    },
+    {
+      "path": "api.ts",
+      "content": "export function encodeCursor(item) {\n  const raw = `${item.id}:${item.created_at}`;\n  return Buffer.from(raw).toString(\"base64\");\n}\n\nexport function pageSize(requested) {\n  const DEFAULT = 20, MAX = 100;\n  return Math.min(requested ?? DEFAULT, MAX);\n}\n\nexport function logRequest(req, latencyMs) {\n  logger.info(JSON.stringify({\n    request_id: req.id,\n    timestamp: new Date().toISOString(),\n    route: req.route,\n    latency_ms: latencyMs,\n  }));\n}\n\nexport function redactPII(obj) {\n  return mask(obj, [\"email\", \"ssn\", \"phone\"]);\n}\n\nexport function uuid() {\n  return crypto.randomUUID();\n}\n\nexport function capitalize(s) {\n  return s.charAt(0).toUpperCase() + s.slice(1);\n}\n",
+      "spans": [
+        { "find": "encodeCursor", "expected": "pagination-spec.md" },
+        { "find": "pageSize", "expected": "pagination-spec.md" },
+        { "find": "logRequest", "expected": "logging-spec.md" },
+        { "find": "redactPII", "expected": "logging-spec.md" },
+        { "find": "uuid", "expected": "UNGROUNDED" },
+        { "find": "capitalize", "expected": "UNGROUNDED" }
+      ]
+    }
+  ]
+}

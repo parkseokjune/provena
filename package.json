@@ -1,0 +1,21 @@
+{
+  "name": "provena",
+  "version": "0.1.0",
+  "description": "Track where every line of AI-generated code came from.",
+  "type": "module",
+  "bin": {
+    "provena": "./src/cli.ts"
+  },
+  "engines": {
+    "node": ">=23.6"
+  },
+  "files": [
+    "src"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
+  }
+}

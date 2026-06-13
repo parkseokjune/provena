@@ -1,0 +1,10 @@
+{
+  "spans": [
+    { "fn": "buildAccessToken",      "expected": "oauth-spec.md",      "reason": "HS256 + 15 min access token expiry" },
+    { "fn": "refreshTokenExpiry",    "expected": "conversation.md",    "reason": "30-day refresh token (user requirement)" },
+    { "fn": "storeRefreshToken",     "expected": "conversation.md",    "reason": "store refresh token hashed, not plaintext" },
+    { "fn": "verifyStripeSignature", "expected": "stripe-webhooks.md", "reason": "HMAC-SHA256 + constant-time compare" },
+    { "fn": "redeemAuthCode",        "expected": "oauth-spec.md",      "reason": "reject already-redeemed auth code" },
+    { "fn": "slugify",               "expected": "UNGROUNDED",         "reason": "generic helper, no source — model knowledge" }
+  ]
+}
