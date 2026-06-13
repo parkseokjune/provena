@@ -169,6 +169,32 @@ async function main() {
       console.log("\nProvena gate passed.");
       return;
     }
+    case "export": {
+      const path = process.argv[3];
+      const outIdx = process.argv.indexOf("--out");
+      if (!path) return console.error("usage: provena export <file> [--out attestation.json]");
+      const { buildAttestation } = await import("./attest.ts");
+      const att = await buildAttestation(cwd, path);
+      if (!att) return console.error(`No captured artifact for ${path}.`);
+      const json = JSON.stringify(att, null, 2);
+      if (outIdx >= 0 && process.argv[outIdx + 1]) {
+        writeFileSync(process.argv[outIdx + 1], json + "\n");
+        console.log(`Signed attestation written to ${process.argv[outIdx + 1]} (ed25519, ${att.coverage.grounded}/${att.coverage.total} grounded).`);
+      } else {
+        console.log(json);
+      }
+      return;
+    }
+    case "verify": {
+      const path = process.argv[3];
+      if (!path) return console.error("usage: provena verify <attestation.json>");
+      const { verifyAttestation } = await import("./attest.ts");
+      const att = JSON.parse(readFileSync(path, "utf8"));
+      const ok = verifyAttestation(att);
+      console.log(ok ? "✓ signature VALID — attestation is authentic and unaltered" : "✗ signature INVALID");
+      if (!ok) process.exit(1);
+      return;
+    }
     case "reset":
       return reset(cwd);
     default:
@@ -179,6 +205,8 @@ async function main() {
           "  sources       list captured sources\n" +
           "  audit <file>  attribute a generated file and print its coverage report\n" +
           "  gate <file...> [--max-ungrounded <pct>]  CI gate: fail if too much ungrounded code\n" +
+          "  export <file> [--out f]  write a signed (ed25519) provenance attestation\n" +
+          "  verify <attestation>     verify a signed attestation\n" +
           "  reset         wipe the local provenance graph",
       );
   }

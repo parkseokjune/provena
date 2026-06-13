@@ -1,5 +1,8 @@
 # Provena
 
+[![CI](https://github.com/parkseokjune/provena/actions/workflows/ci.yml/badge.svg)](https://github.com/parkseokjune/provena/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 **Track where every line of AI-generated code came from.**
 
 When Claude (or any agent) writes code, Provena records *what it saw* (files read,
@@ -56,6 +59,8 @@ Then restart Claude Code in this project so it loads the hooks and the `provena`
 | `provena sources` | list captured sources |
 | `provena audit <file>` | attribute a generated file and print its coverage report |
 | `provena gate <file...> [--max-ungrounded <pct>]` | CI gate: exit non-zero if a file's ungrounded ratio exceeds the budget |
+| `provena export <file> [--out f]` | write a signed (ed25519) provenance attestation |
+| `provena verify <attestation>` | verify a signed attestation is authentic and unaltered |
 | `provena reset`   | wipe the local provenance graph |
 
 ## MCP tools

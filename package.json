@@ -6,13 +6,34 @@
   "bin": {
     "provena": "./src/cli.ts"
   },
+  "scripts": {
+    "test": "node --test test/provena.test.ts && node test-judge.ts",
+    "eval": "node src/eval.ts",
+    "eval:heldout": "node src/eval-heldout.ts"
+  },
   "engines": {
     "node": ">=23.6"
   },
   "files": [
-    "src"
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "provenance",
+    "llm",
+    "ai",
+    "mcp",
+    "code-attribution",
+    "claude-code",
+    "audit",
+    "compliance"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/parkseokjune/provena.git"
+  },
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",
     "@modelcontextprotocol/sdk": "^1.29.0",

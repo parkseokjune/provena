@@ -128,7 +128,8 @@ async function main() {
 
   console.log("Embedding-only @ calibrated LOW:");
   line("train", score(train, best.low));
-  line("TEST (held-out)", score(test, best.low));
+  const testMetric = score(test, best.low);
+  line("TEST (held-out)", testMetric);
   line("overall", score(recs, best.low));
 
   // oracle ceiling on TEST (perfect judge over top-K in the band)
@@ -175,6 +176,21 @@ async function main() {
     console.log("\nLIVE judge: skipped (set PROVENA_LIVE=1 + a judge key to run).");
   }
   store.close();
+
+  // CI regression guard: the cardinal metric (false attribution) must stay 0 and
+  // held-out F1 must not regress below a floor. Enabled with PROVENA_ASSERT=1.
+  if (process.env.PROVENA_ASSERT === "1") {
+    const minF1 = Number(process.env.PROVENA_MIN_F1 ?? 0.85);
+    if (testMetric.falseAttr > 0) {
+      console.error(`\nASSERT FAILED: held-out false-attribution ${pct(testMetric.falseAttr)} > 0`);
+      process.exit(1);
+    }
+    if (testMetric.f1 < minF1) {
+      console.error(`\nASSERT FAILED: held-out F1 ${pct(testMetric.f1)} < floor ${pct(minF1)}`);
+      process.exit(1);
+    }
+    console.log(`\nASSERT OK: held-out F1 ${pct(testMetric.f1)} ≥ ${pct(minF1)}, false-attribution 0%.`);
+  }
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
