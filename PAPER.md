@@ -16,7 +16,7 @@ distinction observable at the granularity of individual spans. Provena's enablin
 is to capture the agent's *candidate source pool* without the agent's cooperation, by
 intercepting tool calls through the host's hook mechanism, and to attribute each span of
 a generated artifact post hoc using local-embedding retrieval followed by an LLM judge
-restricted to a *rescue* role. We argue that the cardinal metric for such a system is
+that owns the similarity band where grounded and ungrounded spans overlap. We argue that the cardinal metric for such a system is
 **false attribution** — labeling unsourced content as grounded — and we hold it to zero
 throughout. On a single-language benchmark, embedding-only attribution attains
 F1 = 94.7% at 0% false attribution; with an LLM judge it reaches F1 = 100%. On a larger
@@ -24,9 +24,11 @@ multi-language held-out benchmark (TypeScript, Python, Go), embedding-only attai
 test F1 = 90.9% at 0% false attribution, with an oracle ceiling of 95.7%. Two design
 findings generalize beyond Provena: (i) a held-out split is necessary because the naive
 threshold that is loss-free on training data produces 25% false attribution on unseen
-data; and (ii) a weak LLM judge must *rescue* low-confidence retrievals rather than be
-allowed to *veto* confident ones, or it degrades recall below the retrieval-only
-baseline. Capture and storage are entirely local. We release the implementation, the
+data; and (ii) the right division of labor is for the LLM judge to *own the overlap band*
+where grounded and ungrounded similarities mix — confining it below a threshold lets
+false attributions through (an ungrounded helper outscores a grounded span under
+distractor pressure), while letting a weak judge veto the high-confidence region loses
+recall. Capture and storage are entirely local. We release the implementation, the
 benchmarks, and the evaluation harness.
 
 ---
@@ -60,9 +62,9 @@ because it launders hallucination as provenance.
 1. **Hook-mediated capture** (§4): reconstructing the agent's candidate source pool by
    intercepting tool calls, requiring no cooperation from the model and keeping all data
    local.
-2. **A rescue-not-veto attribution pipeline** (§5): top-K per-source embedding retrieval,
-   with an LLM judge confined to rescuing low-confidence retrievals — a design we show is
-   necessary for a weak judge to be non-harmful.
+2. **An overlap-band attribution pipeline** (§5): top-K per-source embedding retrieval,
+   with an LLM judge owning exactly the similarity region where grounded and ungrounded
+   spans mix — a placement we derive from two opposing failure modes (§7.5–7.7).
 3. **False attribution as the primary metric**, held to 0% across all configurations,
    and the empirical demonstration (§7) that a held-out split is required to keep it there.
 4. **An open implementation, two benchmarks, and a reproducible harness** (§6, appendix).
@@ -124,7 +126,7 @@ Provena has three parts (Figure 1, described textually).
 Capture (hooks)             Store (local SQLite)        Attribution (on demand)
   Read / WebFetch / Grep ─┐  source                      segment A → spans
   user prompts ───────────┤  artifact (versioned)        retrieve top-K per source
-  Write / Edit ───────────┘  span, link, embedding       decide / judge (rescue)
+  Write / Edit ───────────┘  span, link, embedding       decide / judge (overlap)
                                   ▲                        write spans + links
   Query: why(A,line) / audit(A) ──┘
 ```
@@ -162,15 +164,15 @@ sources**. Keeping the best chunk *per source* (rather than the globally top chu
 guarantees the shortlist spans distinct sources, which matters because the correct source
 can be ranked low when similarities sit near the noise floor (§7, the `redactPII` case).
 
-**Decision — the judge rescues, it does not veto.** Let `s` be the top-1 similarity, `LOW`
-a calibrated threshold, and `floor = 0.10`:
-- `s ≥ LOW` → **grounded** (embedding owns this region; the judge is not consulted);
-- `floor ≤ s < LOW` → **rescue band**: the judge adjudicates the top-K candidates;
-- `s < floor` → **ungrounded**;
-- with no judge configured, the region just below `HIGH` is reported honestly as
-  **uncertain** rather than asserted.
+**Decision — the judge owns the overlap band.** Let `s` be the top-1 similarity,
+`HIGH = 0.45`, `floor = 0.10`:
+- `s ≥ HIGH` → **grounded**: embedding is reliable in this unambiguous high region;
+- `floor ≤ s < HIGH` → **overlap band**: a judge, if configured, adjudicates the top-K
+  candidates (grounded iff one is judged to derive the span); with no judge the band is
+  reported honestly as **uncertain** rather than asserted;
+- `s < floor` → **ungrounded**.
 
-**Judge.** In the rescue band, the LLM judge reads the span and, for each top-K candidate,
+**Judge.** In the overlap band, the LLM judge reads the span and, for each top-K candidate,
 its **full source text** (not merely the best-matching chunk, since the supporting
 sentence frequently lives in another chunk of the same document). It is prompted to decide
 *derivation* — did the source supply the specific fact, value, rule, or API the span
@@ -179,9 +181,13 @@ evidence quote. The judge is provider-agnostic (we test Google Gemini and Anthro
 Claude). It is throttled with exponential backoff, and per-day quota errors fast-fail
 (never retry) so the pipeline cannot hang.
 
-The rescue-not-veto restriction is the key design choice and is justified empirically in
-§7: when the judge was permitted to veto embedding-confident spans, a weak judge model
-rejected many true positives and pushed live F1 *below* the retrieval-only baseline.
+Why the judge owns *exactly* the overlap band — and nothing above it — is the resolution
+of two opposing failures (§7.4–7.6). Below `HIGH`, grounded and ungrounded similarities
+overlap, so confining the judge *below a threshold* lets ungrounded spans that invade the
+grounded range slip through as false attributions; yet letting a *weak* judge *veto*
+embedding-confident spans over-rejects sparse grounded functions and costs recall. Owning
+precisely the overlap band drives false attribution to 0 (the contract) while the recall
+cost scales with judge quality and is bounded above by the oracle ceiling.
 
 ---
 
@@ -204,7 +210,7 @@ and validation specs. Each span is labeled with its expected source or `UNGROUND
 **Models.** Local embeddings `all-MiniLM-L6-v2`. Live judge: `gemini-2.5-flash-lite`
 (a small, fast model — a deliberately conservative choice, so the judge's contribution is
 a lower bound on what a stronger model would add). An *oracle* judge (a perfect decision
-in the rescue band over the top-K) measures the architecture's ceiling.
+in the overlap band over the top-K) measures the architecture's ceiling.
 
 ---
 
@@ -244,6 +250,10 @@ judge reads several candidates.
 | **False-attribution** | **0.0%** | **0.0%** | **0.0%** |
 | Source accuracy | 90.0% | 100.0% | 90.0% |
 
+(Live figures use a Gemini judge; Benchmark B carries no distractor sources, so false
+attribution does not arise here. The distractor stress test is §7.6, and the final judge
+placement that the live system uses is §7.7.)
+
 ### 7.4 A held-out split is necessary (false attribution generalizes poorly)
 
 Calibrating `LOW` to the *lowest* value with zero false attribution on the training split
@@ -253,16 +263,39 @@ achieving the same training F1 (`LOW = 0.24`) restored **0% false attribution on
 The cardinal metric is the one most prone to silent overfitting; a held-out protocol is
 not optional for it.
 
-### 7.5 The judge must rescue, not veto
+### 7.5 Failure A — a weak judge that can *veto* loses recall
 
-Our first live design let the judge adjudicate the entire band below `HIGH`. The small
-judge model then *vetoed* sparse constant functions whose meaning is carried by their name
-(`get_ttl(): return 300`, `maxRetries(): return 5`), which embedding had correctly
-accepted — dropping **live F1 to 73.7%, below the 90.9% retrieval-only baseline**.
-Restricting the judge to the sub-`LOW` rescue band, where it can only add recall and never
-override an embedding-confident span, **restored live F1 to 90.9%** with false attribution
-still 0%. The judge is thereby *non-harmful by construction*, and the 95.7% oracle ceiling
-bounds the recall a stronger judge would unlock.
+Letting the judge adjudicate the entire band below `HIGH` *and* override embedding had a
+cost: the small judge model *vetoed* sparse constant functions whose meaning is carried by
+their name (`get_ttl(): return 300`, `maxRetries(): return 5`), which embedding had
+correctly accepted — dropping **live F1 to 73.7%, below the 90.9% retrieval-only
+baseline**. So a weak judge should not be able to override an embedding-confident span.
+
+### 7.6 Failure B — confining the judge below a threshold lets false attributions through
+
+The opposite confinement fails too. We added a third benchmark variant (Benchmark B
+extended to four languages with two **distractor sources** the model saw but no span uses,
+38 spans). With a `crypto-spec` source in the pool, the generic helper `uuid()` (truly
+ungrounded) scores **0.243 — above the calibrated threshold and above the entire training
+ungrounded distribution (≤ 0.176)** — and embedding-only falsely attributes it to
+`crypto-spec`. No global threshold separates them (similarity inversion at corpus scale; a
+max-margin threshold does worse). Embedding-only test false attribution is **14.3%**.
+
+| metric (TEST, distractor corpus) | embedding-only | oracle ceiling |
+|--------|---------------:|---------------:|
+| F1 | 85.7% | 96.6% |
+| **False-attribution** | **14.3%** | **0.0%** |
+| Source accuracy | 83.3% | 92.9% |
+
+### 7.7 Resolution — the judge owns exactly the overlap band
+
+Failures A and B bracket the answer: the judge must *not* be confined below a threshold
+(B), and must *not* be able to veto the high-confidence region (A). Giving it precisely the
+overlap band `[floor, HIGH)` — adjudicating there, deferring to embedding only at `s ≥
+HIGH` — drives false attribution to **0%** (the oracle restores it under distractor
+pressure at F1 96.6%) while a weak judge's recall cost is confined to sparse spans and
+bounded by the oracle ceiling. This is Provena's default; honesty (0% false attribution) is
+the binding constraint, and judge quality buys back recall toward the ceiling.
 
 ---
 
@@ -312,13 +345,15 @@ regulatory attestation.
 ## 11. Conclusion
 
 Provena makes span-level provenance of agent-written code observable, queryable, and
-honest. Hook-mediated capture supplies the source pool without model cooperation, and a
-rescue-not-veto retrieve-then-judge pipeline attributes sources while never fabricating an
-origin: false attribution is 0% across every configuration, embedding-only reaches
-F1 90.9–94.7% held-out, and the architecture's ceiling is 95.7–100%. The two design
-lessons — hold out a split to protect the cardinal metric, and let a weak judge rescue but
-not veto — are likely to transfer to other attribution and verification systems built on
-imperfect models.
+honest. Hook-mediated capture supplies the source pool without model cooperation, and an
+overlap-band retrieve-then-judge pipeline attributes sources while never fabricating an
+origin: with a competent judge false attribution is driven to 0% (oracle ceiling 95.7–100%),
+embedding-only reaches F1 85.7–94.7% held-out, and under distractor pressure the judge is
+*necessary* — no global similarity threshold separates an ungrounded helper that outscores
+a grounded span. The two design lessons — hold out a split to protect the cardinal metric,
+and give the judge exactly the overlap band (not below a threshold, not vetoing the
+confident region) — are likely to transfer to other attribution and verification systems
+built on imperfect models.
 
 ---
 

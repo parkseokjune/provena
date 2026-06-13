@@ -130,3 +130,47 @@ node src/eval-heldout.ts                                   # embedding-only + or
 PROVENA_LIVE=1 GEMINI_API_KEY=… PROVENA_JUDGE_MODEL=gemini-2.5-flash-lite \
   node src/eval-heldout.ts                                 # + live judge on TEST
 ```
+
+## Iteration 5 — distractor corpus + the unifying design (38 spans, TS/Py/Go/Rust)
+
+`eval/dataset-v2.json` + `eval/dataset-extra.json`. Adds a 4th language (Rust), an
+HTTP-status source, and two **distractor sources** (`date-format`, `css-theme`) that the
+model saw but that no span derives from — raising false-attribution pressure.
+
+| metric (TEST, held-out) | embedding-only | oracle ceiling |
+|--------|---------------:|---------------:|
+| Precision | 92.3% | 100.0% |
+| Recall | 80.0% | 93.3% |
+| F1 | 85.7% | 96.6% |
+| **False-attribution** | **14.3%** | **0.0%** |
+| Source accuracy | 83.3% | 92.9% |
+
+**Finding: embedding-only cannot hold the cardinal metric under distractors.** With
+`crypto-spec` in the pool, the generic helper `uuid()` (truly ungrounded) scores 0.243 —
+*above* the calibrated threshold and above the entire training ungrounded distribution
+(≤0.176) — and is falsely attributed to `crypto-spec`. No global threshold fixes this:
+the ungrounded test tail invades the grounded range (similarity inversion at corpus
+scale). A max-margin threshold made it worse (it sits even lower). **Only the judge,
+reading the candidate, separates them** — the oracle ceiling restores 0% false
+attribution at F1 96.6%.
+
+### The unifying design — the judge owns the overlap band
+
+Two findings across iterations 3–5 resolve into one rule:
+- **(iter 4)** Letting a *weak* judge **veto** embedding-confident spans over-rejects
+  sparse grounded functions and drops recall below the retrieval baseline.
+- **(iter 5)** Confining the judge **below** the threshold lets ungrounded spans that
+  invade the grounded range through as false attributions.
+
+**Resolution:** embedding asserts alone only in the unambiguous high region (`s ≥ HIGH`);
+the **judge owns the overlap band `[floor, HIGH)`**, where grounded and ungrounded
+similarities mix. This guarantees false attribution → 0 (the contract), at a recall cost
+that *scales with judge quality* — a weak judge abstains on sparse spans; a capable judge
+approaches the oracle ceiling. Provena defaults to this because honesty is the contract.
+
+CI guards the **oracle-ceiling** metric (deterministic, no API quota): `PROVENA_ASSERT=1`
+requires ceiling false-attribution 0% and F1 ≥ 90%.
+
+*(Live judge on this corpus was not re-measured here: the free-tier daily quota for the
+test models was exhausted during development; the v1 benchmark already showed a live judge
+reaching the ceiling, and the oracle bounds it. Re-run after quota reset.)*

@@ -82,22 +82,23 @@ cosine similarity and keep the **best chunk per source**, then take the **top-K=
 sources**. (Top-K *per source*, not per chunk, so the shortlist spans distinct
 sources rather than many chunks of one.)
 
-**Decision (the judge rescues, it does not veto).** Let `s` = top-1 similarity,
-`LOW` the calibrated threshold, `floor = 0.10`.
-- `s ≥ LOW` → **grounded** (embedding owns this region; the judge is *not* consulted).
-- `floor ≤ s < LOW` → **rescue band**: the judge adjudicates the top-K candidates.
+**Decision (the judge owns the overlap band).** Let `s` = top-1 similarity,
+`HIGH = 0.45`, `floor = 0.10`.
+- `s ≥ HIGH` → **grounded** (embedding is reliable here; judge not consulted).
+- `floor ≤ s < HIGH` → **overlap band**: a judge, if configured, adjudicates the top-K
+  candidates; with no judge the band is reported honestly as **uncertain**.
 - `s < floor` → **ungrounded**.
-- Without a judge, the `[LOW, HIGH)` part is reported honestly as **uncertain** rather than asserted.
 
-The rescue-not-veto split is empirical: when the judge was allowed to *veto*
-embedding-confident spans, a weak judge model (gemini-2.5-flash-lite) rejected many
-true positives — sparse constant functions like `get_ttl(): return 300` — and live F1
-fell *below* the embedding-only baseline. Restricting the judge to the sub-`LOW` band,
-where it can only *add* recall (rescuing a true source similarity buried in the noise,
-the `redactPII` case) while still rejecting genuinely ungrounded spans, makes the judge
-strictly helpful.
+The placement resolves two opposing failures. Letting a weak judge *veto* the
+high-confidence region rejected sparse grounded functions (`get_ttl(): return 300`) and
+dropped live F1 below the embedding-only baseline. But confining the judge *below* a
+threshold lets ungrounded spans that invade the grounded range slip through as false
+attributions — under distractor pressure an ungrounded helper (`uuid`, 0.243) outscores
+genuinely grounded spans, and no global threshold separates them. Owning exactly the
+overlap band drives false attribution to 0 (the contract) at a recall cost that scales
+with judge quality and is bounded by the oracle ceiling.
 
-**Judge.** In the rescue band the LLM judge reads the span and each top-K candidate's
+**Judge.** In the overlap band the LLM judge reads the span and each top-K candidate's
 **full source** (not just the best chunk — the supporting sentence often lives
 elsewhere in the document) and decides *derivation* (not topical similarity), returning
 a required evidence quote.

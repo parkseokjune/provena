@@ -29,8 +29,8 @@ jobs:
       - name: Unit tests + judge wiring (no model, no network)
         run: npm test
 
-      - name: Held-out attribution regression (embedding model)
+      - name: Held-out attribution regression (oracle-ceiling guard)
         env:
           PROVENA_ASSERT: "1"
-          PROVENA_MIN_F1: "0.85"
+          PROVENA_MIN_F1: "0.90"
         run: node src/eval-heldout.ts

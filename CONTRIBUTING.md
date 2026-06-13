@@ -22,8 +22,8 @@ npm run eval:heldout     # multi-language held-out benchmark
 
 ## Design rules (see PAPER.md for the rationale)
 
-1. **The judge rescues, it does not veto** — it may only add recall in the sub-`LOW`
-   band, never override an embedding-confident span.
+1. **The judge owns the overlap band `[floor, HIGH)`** — embedding asserts alone only at
+   `s ≥ HIGH`; the judge adjudicates the region where grounded/ungrounded similarities mix.
 2. **`ungrounded`/`uncertain` are first-class outputs** — never guess to inflate coverage.
 3. **Calibrate on train, report on test** — the false-attribution metric overfits easily.
 4. **Local by default** — capture and storage stay on the machine; the LLM judge is opt-in.

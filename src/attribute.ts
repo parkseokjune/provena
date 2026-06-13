@@ -145,25 +145,23 @@ export async function attribute(
     let sourceId: number | null = best.sourceId >= 0 ? best.sourceId : null;
     let sourceUri: string | null = best.uri || null;
 
-    // Decision. The judge RESCUES, it does not VETO: embedding owns the confident
-    // region (sim >= low) and stays grounded there, because a weak judge model
-    // wrongly rejecting those costs more recall than it saves (observed: live F1
-    // fell below embedding-only when the judge could veto). The judge only adds
-    // value in the sub-`low` rescue band [floor, low), where it reads the top-K
-    // candidates to recover a true source that similarity ranked into the noise
-    // (the redactPII case) — while still rejecting genuinely ungrounded spans.
+    // Decision. Embedding alone is reliable only in the unambiguous high region
+    // (sim ≥ HIGH); below it, grounded and ungrounded similarities OVERLAP (an
+    // ungrounded helper like `uuid` can outscore a genuinely grounded span — the
+    // similarity-inversion problem, sharpened by distractor sources). No global
+    // threshold separates that overlap, so when a judge is available it OWNS the
+    // overlap band [floor, HIGH): a span there is grounded only if the judge
+    // confirms a top-K candidate derives it. This guarantees the cardinal metric
+    // (false attribution → 0) at a recall cost that scales with judge quality
+    // (weak judges abstain on sparse spans; a capable judge approaches the oracle).
+    // With no judge, the overlap band is reported honestly as `uncertain`.
     const floor = opts.judgeFloor ?? 0.1;
 
     if (best.sim >= high) {
       status = "grounded"; // embedding confident
       evidence = best.text;
     } else if (opts.useJudge) {
-      if (best.sim >= low) {
-        // embedding is confident enough — trust it; the judge does NOT veto here
-        status = "grounded";
-        evidence = best.text;
-      } else if (best.sim >= floor) {
-        // rescue band: judge the top-K candidates against their FULL source text
+      if (best.sim >= floor) {
         const k = opts.judgeK ?? 3;
         const shortlist = ranked.filter((r) => r.sim >= floor).slice(0, k);
         method = "llm_judge";
@@ -186,7 +184,7 @@ export async function attribute(
         sourceUri = null;
       }
     } else {
-      // no judge: be honest about the middle band rather than guessing
+      // no judge: be honest about the overlap band rather than guessing
       if (best.sim >= low) {
         status = "uncertain";
         evidence = best.text;

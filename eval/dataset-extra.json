@@ -1,0 +1,31 @@
+{
+  "description": "Extension corpus merged on top of dataset-v2.json by src/eval-heldout.ts. Adds a 4th language (Rust), an HTTP-status source, AND two DISTRACTOR sources (date-format, css-theme) that the model 'saw' but that no span derives from — these raise false-attribution pressure: a correct system must never attribute any span to them.",
+  "sources": [
+    { "uri": "crypto-spec.md", "type": "file", "content": "Password hashing uses Argon2id with 64 MB of memory and 3 iterations. Session identifiers are 32 random bytes encoded as base64url." },
+    { "uri": "http-spec.md", "type": "file", "content": "API responses use 200 for success, 201 when a resource is created, 404 when a resource is missing, and 429 when the client is rate-limited, with a Retry-After header indicating when to retry." },
+    { "uri": "date-format-spec.md", "type": "file", "content": "Timestamps in the UI are formatted with the user's locale via Intl.DateTimeFormat. Relative times such as '3h ago' are shown for events under a day old, absolute dates otherwise." },
+    { "uri": "css-theme-spec.md", "type": "file", "content": "The primary brand color is #2563eb. The spacing scale uses a 4px base unit. Dark mode toggles a data-theme attribute on the root element." }
+  ],
+  "artifacts": [
+    {
+      "path": "security.rs",
+      "content": "fn hash_password(pw: &str) -> String {\n    argon2id(pw, MemoryKiB(65536), Iterations(3))\n}\n\nfn new_session_id() -> String {\n    base64url(random_bytes(32))\n}\n\nfn max_of(a: i64, b: i64) -> i64 {\n    if a > b { a } else { b }\n}\n\nfn is_even(n: i64) -> bool {\n    n % 2 == 0\n}\n",
+      "spans": [
+        { "find": "hash_password", "expected": "crypto-spec.md" },
+        { "find": "new_session_id", "expected": "crypto-spec.md" },
+        { "find": "max_of", "expected": "UNGROUNDED" },
+        { "find": "is_even", "expected": "UNGROUNDED" }
+      ]
+    },
+    {
+      "path": "http.ts",
+      "content": "export function statusForCreate() {\n  return 201;\n}\n\nexport function notFoundResponse(res) {\n  return res.status(404).json({ error: \"not found\" });\n}\n\nexport function rateLimited(res, retryAfter) {\n  return res.status(429).set(\"Retry-After\", retryAfter).end();\n}\n\nexport function parseBool(s) {\n  return s === \"true\" || s === \"1\";\n}\n",
+      "spans": [
+        { "find": "statusForCreate", "expected": "http-spec.md" },
+        { "find": "notFoundResponse", "expected": "http-spec.md" },
+        { "find": "rateLimited", "expected": "http-spec.md" },
+        { "find": "parseBool", "expected": "UNGROUNDED" }
+      ]
+    }
+  ]
+}
