@@ -43,12 +43,18 @@ Storage is local SQLite (Node's built-in `node:sqlite`), so nothing leaves your 
 
 ## Setup
 
+Install from source (GitHub):
+
 ```bash
-npm install            # installs @modelcontextprotocol/sdk + zod
+git clone https://github.com/parkseokjune/provena.git
+cd provena
+npm install            # installs @modelcontextprotocol/sdk + zod + local embeddings
 node src/cli.ts init   # wires hooks into .claude/settings.json + registers MCP in .mcp.json
 ```
 
-Then restart Claude Code in this project so it loads the hooks and the `provena` MCP server.
+Run `provena` against your own project by passing its path, or copy the `provena` dir
+alongside your repo. Then restart Claude Code so it loads the hooks and the `provena`
+MCP server.
 
 ## CLI
 
