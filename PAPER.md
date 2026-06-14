@@ -297,6 +297,11 @@ pressure at F1 96.6%) while a weak judge's recall cost is confined to sparse spa
 bounded by the oracle ceiling. This is Provena's default; honesty (0% false attribution) is
 the binding constraint, and judge quality buys back recall toward the ceiling.
 
+A live sweep on the 48-span distractor corpus confirms this holds in practice: a real
+judge (`gemini-2.5-flash-lite` and `gemini-2.5-flash`) achieves **0% false attribution**
+(vs 18.2% for embedding-only) at F1 78.6% — the gap to the 97.0% ceiling being the
+weak-judge recall cost, which a stronger judge is expected to close.
+
 ---
 
 ## 8. Discussion

@@ -174,3 +174,40 @@ requires ceiling false-attribution 0% and F1 ≥ 90%.
 *(Live judge on this corpus was not re-measured here: the free-tier daily quota for the
 test models was exhausted during development; the v1 benchmark already showed a live judge
 reaching the ceiling, and the oracle bounds it. Re-run after quota reset.)*
+
+## Iteration 6 — scaled to 48 spans, 4 distractor sources
+
+`+ eval/dataset-extra2.json`: adds JWT and email sources, a **discriminative** case
+(RS256 code must not map to the HS256 `oauth-spec`), cross-file source reuse, and two more
+distractor sources (i18n, telemetry). Corpus now 48 spans / 16 sources / 4 distractors.
+
+| metric (TEST, held-out) | embedding-only | oracle ceiling |
+|--------|---------------:|---------------:|
+| F1 | 88.2% | 97.0% |
+| **False-attribution** | **18.2%** | **0.0%** |
+| Source accuracy | 80.0% | 93.8% |
+
+Two generic helpers are falsely attributed by embedding-only — `uuid → crypto-spec` and
+`pluck → i18n-spec` (a **distractor** source) — both at sim 0.243. The pattern is stable
+across corpus growth: **more sources ⇒ more ways for an ungrounded helper to cross the
+threshold**, so embedding-only false attribution rises (0% → 14% → 18%) while the judge
+(oracle) holds it at **0%** with F1 climbing to 97.0%. This is the central empirical case
+for the judge being a correctness requirement, not an enhancement.
+
+### Live judge sweep on the distractor corpus (`src/judge-sweep.ts`)
+
+Run live on the 48-span held-out TEST split, verify-mode (judge owns `[floor, HIGH)`):
+
+| judge model | P | R | F1 | false-attr | src acc |
+|---|---:|---:|---:|---:|---:|
+| gemini-2.5-flash-lite | 100.0% | 64.7% | 78.6% | **0.0%** | 90.9% |
+| gemini-2.5-flash | 100.0% | 64.7% | 78.6% | **0.0%** | 90.9% |
+| oracle ceiling | 100.0% | 94.1% | 97.0% | 0.0% | 93.8% |
+
+The real judge **holds false attribution at 0% under distractor pressure** (vs 18.2% for
+embedding-only) — the design works live, not only in the oracle. The recall gap to the
+ceiling (64.7% vs 94.1%) is the *weak-judge cost*: small flash models abstain on sparse
+constant spans in the overlap band. Both flash tiers score identically here, suggesting the
+bottleneck is the overlap-band decision rather than model size at this tier; closing the
+gap (a stronger judge, e.g. a Pro/Opus tier, or calibrated judge prompting) is the clearest
+lever. `gemini-2.0-flash` and the Anthropic model were out of quota / unconfigured this run.

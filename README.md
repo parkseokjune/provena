@@ -23,19 +23,35 @@ held-out F1 90.9–94.7%, ceiling 95.7–100%).
 
 ## How it works
 
-```
-Claude Code session
-  Read / WebFetch / Grep ─┐ PostToolUse hook
-  your prompts ───────────┤   → captured as `source`
-  Write / Edit ───────────┘   → captured as `artifact`
-                              ↓
-                   .provena/provenance.db  (SQLite)
-                              ↑
-       provena_* MCP tools (query · cite · audit)
+```mermaid
+flowchart LR
+  subgraph Session["Claude Code session"]
+    R["Read / WebFetch / Grep"]
+    P["your prompts"]
+    W["Write / Edit"]
+  end
+  R -- PostToolUse hook --> SRC[(source)]
+  P -- UserPromptSubmit hook --> SRC
+  W -- PostToolUse hook --> ART[(artifact)]
+  subgraph Store[".provena/provenance.db — local SQLite"]
+    SRC
+    ART
+    EMB[(embedding cache)]
+  end
+  ART --> ENG{{"attribution engine"}}
+  SRC --> ENG
+  ENG -- "s ≥ HIGH" --> G["grounded (embedding)"]
+  ENG -- "overlap band\n[floor, HIGH)" --> J["LLM judge\n(top-K, full source)"]
+  ENG -- "s < floor" --> U["ungrounded"]
+  J --> G
+  J --> U
+  G & U --> Q["provena why / audit / gate / export"]
 ```
 
 Capture needs no cooperation from the model — hooks sit in the tool path.
 Storage is local SQLite (Node's built-in `node:sqlite`), so nothing leaves your machine.
+Embedding asserts in the confident region; the **judge owns the overlap band** where
+grounded and ungrounded similarities mix, which is what holds false attribution to 0%.
 
 ## Requirements
 

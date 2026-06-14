@@ -1,0 +1,33 @@
+{
+  "description": "Second extension corpus (merged after dataset-v2 + dataset-extra). Adds JWT and email sources, a discriminative case (RS256 code must NOT map to the HS256 oauth-spec), cross-file source reuse (token_ttl -> oauth-spec), and two more DISTRACTOR sources (i18n, telemetry) that no span uses.",
+  "sources": [
+    { "uri": "jwt-spec.md", "type": "file", "content": "Service tokens are signed with RS256 using a 2048-bit RSA key. The 'kid' header selects the active signing key during rotation. Every token carries iss, aud, and exp claims." },
+    { "uri": "email-spec.md", "type": "file", "content": "Outbound email is sent via SendGrid. The From address is no-reply@acme.com. Bounces are processed by a webhook and an address is suppressed after 3 hard bounces." },
+    { "uri": "i18n-spec.md", "type": "file", "content": "UI strings are keyed in en.json; a missing key falls back to the key name itself. Pluralization uses ICU MessageFormat with locale-specific plural rules." },
+    { "uri": "telemetry-spec.md", "type": "file", "content": "Client analytics events are batched every 10 seconds and posted to the analytics endpoint. PII is stripped client-side before any event leaves the device." }
+  ],
+  "artifacts": [
+    {
+      "path": "tokens.py",
+      "content": "def sign_jwt(claims):\n    return jwt.encode(claims, PRIVATE_KEY, algorithm=\"RS256\")\n\ndef key_id(header):\n    return header.get(\"kid\")\n\ndef token_ttl():\n    return 15 * 60\n\ndef noop(x):\n    return x\n\ndef first(xs):\n    return xs[0] if xs else None\n",
+      "spans": [
+        { "find": "sign_jwt", "expected": "jwt-spec.md" },
+        { "find": "key_id", "expected": "jwt-spec.md" },
+        { "find": "token_ttl", "expected": "oauth-spec.md" },
+        { "find": "noop", "expected": "UNGROUNDED" },
+        { "find": "first", "expected": "UNGROUNDED" }
+      ]
+    },
+    {
+      "path": "mailer.ts",
+      "content": "export function fromAddress() {\n  return \"no-reply@acme.com\";\n}\n\nexport function shouldSuppress(bounces) {\n  return bounces >= 3;\n}\n\nexport function sendVia(msg) {\n  return sendgrid.send(msg);\n}\n\nexport function joinPath(a, b) {\n  return `${a}/${b}`.replace(/\\/+/g, \"/\");\n}\n\nexport function pluck(obj, keys) {\n  return keys.map((k) => obj[k]);\n}\n",
+      "spans": [
+        { "find": "fromAddress", "expected": "email-spec.md" },
+        { "find": "shouldSuppress", "expected": "email-spec.md" },
+        { "find": "sendVia", "expected": "email-spec.md" },
+        { "find": "joinPath", "expected": "UNGROUNDED" },
+        { "find": "pluck", "expected": "UNGROUNDED" }
+      ]
+    }
+  ]
+}

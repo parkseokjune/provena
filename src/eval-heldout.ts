@@ -82,7 +82,11 @@ async function main() {
   const argFiles = process.argv.slice(2).filter((a) => a.endsWith(".json"));
   const paths = argFiles.length
     ? argFiles
-    : [join(evalDir, "dataset-v2.json"), join(evalDir, "dataset-extra.json")].filter(existsSync);
+    : [
+        join(evalDir, "dataset-v2.json"),
+        join(evalDir, "dataset-extra.json"),
+        join(evalDir, "dataset-extra2.json"),
+      ].filter(existsSync);
   // merge: dedup sources by uri, concatenate artifacts
   const ds: any = { sources: [], artifacts: [] };
   const seen = new Set<string>();
